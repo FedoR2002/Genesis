@@ -4,13 +4,13 @@ public class Bot {
     private static final int LV_ALIVE = 3;                  // живой бот
     private static final int MIND_SIZE = 64;                // объем памяти генома
 
-    private static double[] randMemory = new double[1000000];   // массив предгенерированных случайных чисел
-    private static int randIdx = 0;                             // указатель текущего случайного числа
-    static {                                                    // предгенерация массива случайных чисел
-        for (int i = 0; i < randMemory.length; i++) {
-            randMemory[i] = Math.random();
-        }
-    }
+//    private static double[] randMemory = new double[1000000];   // массив предгенерированных случайных чисел
+//    private static int randIdx = 0;                             // указатель текущего случайного числа
+//    static {                                                    // предгенерация массива случайных чисел
+//        for (int i = 0; i < randMemory.length; i++) {
+//            randMemory[i] = Math.random();
+//        }
+//    }
 
 
     byte[] mind = new byte[MIND_SIZE];               // геном бота
@@ -32,6 +32,11 @@ public class Bot {
     Bot prev;                // предыдущий в цепочке просчета
     Bot next;                // следующий в цепочке просчета
 
+    private Strain strain;
+
+    public void setStrain(Strain strain){
+        this.strain = strain;
+    }
 
     // ====================================================================
     // =========== главная функция жизнедеятельности бота  ================
@@ -47,7 +52,7 @@ public class Bot {
 //*******************************************************************
 //................      мутировать   ................................
                 case 0:
-                    botMutate();
+                    botMutate(2);
                     botIncAdr(1);   // смещаем указатель текущей команды на 1
                     breakflag = 1;     // выходим, так как команда завершающая
                     break;
@@ -322,18 +327,40 @@ public class Bot {
     //=====  превращение бота в органику    ===========
     private void bot2Organic() {
         alive = LV_ORGANIC_HOLD;       // отметим в массиве bots[], что бот органика
+        int old_family = c_family;
+        Integer old_fam_count = CommonConsts.familiesCount.get(old_family);
+        if (old_fam_count != null) {
+            CommonConsts.familiesCount.replace(old_family, old_fam_count,old_fam_count - 1);
+            if (old_fam_count == 1)
+                CommonConsts.familiesCount.remove(old_family);
+        }
     }
 
 
     //жжжжжжжжжжжжжжжжжжжхжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжжж
-    //===== изменяет случайный байт в геноме  ==============
-    private void botMutate() {
-        int ma = (int) (rand() * MIND_SIZE);    // 0..63 // меняются случайным образом две случайные команды
-        int mc = (int) (rand() * MIND_SIZE);    // 0..63
-        mind[ma] = (byte) mc;
-        ma = (int) (rand() * MIND_SIZE);        // 0..63
-        mc = (int) (rand() * MIND_SIZE);        // 0..63
-        mind[ma] = (byte) mc;
+    //===== изменяет случайные n байт в геноме  ==============
+    private void botMutate(int n) {
+        for (int i=0; i<n; i++){
+            int ma = (int) (rand() * MIND_SIZE);    // 0..63 // меняются случайным образом две случайные команды
+            int mc = (int) (rand() * MIND_SIZE);    // 0..63
+            mind[ma] = (byte) mc;
+        }
+
+        int old_family = c_family;
+        Integer old_fam_count = CommonConsts.familiesCount.get(old_family);
+        int nc_family = getNewColor(c_family);    // цвет семьи вычисляем новый
+        while (CommonConsts.familiesCount.containsKey(nc_family))
+            nc_family = getNewColor(c_family);    // цвет семьи вычисляем новый
+        if (old_fam_count != null) {
+            CommonConsts.familiesCount.replace(old_family, old_fam_count, old_fam_count - 1);
+            if (old_fam_count == 1)
+                CommonConsts.familiesCount.remove(old_family);
+        }
+        c_family = nc_family;
+        CommonConsts.familiesCount.put(nc_family, 1);
+        if (strain != null)
+            strain.removeBot(this);
+        World.simulation.createNewStrain(this);
     }
 
 
@@ -358,7 +385,15 @@ public class Bot {
     //=====   удаление бота        =============
     private void deleteBot(Bot bot) {
         World.simulation.matrix[bot.x][bot.y] = null;   // удаление бота с карты
-
+        if (bot.alive != LV_ORGANIC_HOLD) {
+            int old_family = bot.c_family;
+            Integer old_fam_count = CommonConsts.familiesCount.get(old_family);
+            if (old_fam_count != null) {
+                CommonConsts.familiesCount.replace(old_family, old_fam_count, old_fam_count - 1);
+                if (old_fam_count == 1)
+                    CommonConsts.familiesCount.remove(old_family);
+            }
+        }
         bot.prev.next = bot.next;            // удаление бота из цепочки
         bot.next.prev = bot.prev;            // связывающей всех ботов
     }
@@ -430,6 +465,10 @@ public class Bot {
         return 5;                           // остался только один вариант - на клетке какой-то бот возвращаем 5
     }
 
+    public void died(){
+        strain.removeBot(this);
+    }
+
     //============================    скушать другого бота или органику  ==========================================
     private int botEatBot() { // на входе ссылка на бота, направлелие и флажок(относительное или абсолютное направление)
         // на выходе пусто - 2  стена - 3  органик - 4  бот - 5
@@ -463,6 +502,7 @@ public class Bot {
         if (min0 >= min1) {
             mineral = min0 - min1;          // количество минералов у бота уменьшается на количество минералов у жертвы
             // типа, стесал свои зубы о панцирь жертвы
+            World.simulation.matrix[xt][yt].died();
             deleteBot(World.simulation.matrix[xt][yt]);          // удаляем жертву из списков
             int cl = 100 + (hl / 2);        // количество энергии у бота прибавляется на 100+(половина от энергии жертвы)
             health = health + cl;
@@ -476,6 +516,7 @@ public class Bot {
         //------ если здоровья в 2 раза больше, чем минералов у жертвы  ------
         //------ то здоровьем проламываем минералы ---------------------------
         if (health >= 2 * min1) {
+            World.simulation.matrix[xt][yt].died();
             deleteBot(World.simulation.matrix[xt][yt]);         // удаляем жертву из списков
             int cl = 100 + (hl / 2) - 2 * min1; // вычисляем, сколько энергии смог получить бот
             health = health + cl;
@@ -486,7 +527,8 @@ public class Bot {
         }
         //--- если здоровья меньше, чем (минералов у жертвы)*2, то бот погибает от жертвы
         World.simulation.matrix[xt][yt].mineral = min1 - (health / 2);  // у жертвы минералы истраченны
-        health = 0;                         // здоровье уходит в ноль
+        died();
+        deleteBot(this);
         return 5;                           // возвращаем 5
     }
 
@@ -538,9 +580,7 @@ public class Bot {
             if (World.simulation.matrix[xt][yt].alive == LV_ALIVE) { // если там живой бот
                 health = health - 10;               // то атакуюий бот теряет на атаку 10 энергии
                 if (health > 0) {                   // если он при этом не умер
-                    int ma = (int) (rand() * 64);   // 0..63 // то у жертвы случайным образом меняется один ген
-                    int mc = (int) (rand() * 64);   // 0..63
-                    World.simulation.matrix[xt][yt].mind[ma] = (byte) mc;
+                    World.simulation.matrix[xt][yt].botMutate(1);
                 }
             }
         }
@@ -632,6 +672,7 @@ public class Bot {
         if (n == 8) {                   // если бот окружен, то он в муках погибает
             health = 0;
 //            bot.health += 500;
+            strain.removeBot(this);
             return;
         }
 
@@ -659,11 +700,10 @@ public class Bot {
         newbot.c_family = c_family;     // цвет семьи такой же, как у предка
 
         if (rand() < 0.25) {     // в одном случае из четырех случайным образом меняем один случайный байт в геноме
-            int ma = (int) (rand() * MIND_SIZE);  // 0..63
-            int mc = (int) (rand() * MIND_SIZE);  // 0..63
-            newbot.mind[ma] = (byte) mc;
-            newbot.c_family = getNewColor(c_family);    // цвет семьи вычисляем новый
+            newbot.botMutate(1);
         }
+        else
+            strain.addBot(newbot);
 
         newbot.direction = (int) (rand() * 8);  // направление, куда повернут новорожденный, генерируется случайно
 
@@ -686,6 +726,9 @@ public class Bot {
         return getIntColor(vc(r + (int) (rand() * delta - delta / 2)), vc(g + (int) (rand() * delta - delta / 2)), vc(b + (int) (rand() * delta - delta / 2)));
     }
 
+    public int get_c_family(){
+        return getIntColor(vc(c_red), vc(c_green), vc(c_blue));
+    }
 
     private int getIntColor(int r, int g, int b) {
         int a = 255;
@@ -901,11 +944,11 @@ public class Bot {
 
 
     private double rand() {
-        randIdx++;
-        if (randIdx >= randMemory.length) {
-            randIdx = 0;
+        CommonConsts.randIdx++;
+        if (CommonConsts.randIdx >= CommonConsts.randMemory.length) {
+            CommonConsts.randIdx = 0;
         }
-        return randMemory[randIdx];
+        return CommonConsts.randMemory[CommonConsts.randIdx];
     }
 
 

@@ -4,4 +4,6 @@ public interface GuiCallback {
     void seaLevelChanged(int value);
     boolean startedOrStopped();
     void viewModeChanged(int viewMode);
+    void setWorldScale(int worldScale);
+    void setPerlin(int perlin);
 }

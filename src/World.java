@@ -7,6 +7,9 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Predicate;
 //import java.util.concurrent.locks.Lock;
 //import java.util.concurrent.locks.ReentrantLock;
 
@@ -16,34 +19,46 @@ public class World implements GuiCallback,Consts {
 
     int width;
     int height;
-    private int zoom;
+    private final int zoom;
+    private int perlinValue;
+    private int worldScale;
     int sealevel;
     private int drawstep;
     int[][] map;    //Карта мира
     private int[] mapInGPU;    //Карта для GPU
     private Image mapbuffer = null;
     Bot[][] matrix;    //Матрица мира
-    private Bot zerobot = new Bot();
+    private final Bot zerobot = new Bot();
     private Bot currentbot;
     int generation;
     private int population;
     private int organic;
     private int viewMode = VIEW_MODE_BASE;
 
-    private Image buffer = null;
+    private final Image buffer = null;
 
     private Thread thread = null;
     private boolean started = true; // поток работает?
 
     private final Gui gui;
 
+    private final List<Strain> AllStrains;
+    private final List<DeadStrainStat> deadStrains;
+    private int stableStrainCount;
+    private int deadStrainCount;
+    private int mutationsCount;
+
     public World() {
         simulation = this;
         zoom = 1;
+        worldScale = 100;
+        perlinValue = 300;
         sealevel = 145;
         drawstep = 10;
         gui = new Gui(this);
         gui.init();
+        AllStrains = new ArrayList<>();
+        deadStrains = new ArrayList<>();
     }
 
     @Override
@@ -53,8 +68,8 @@ public class World implements GuiCallback,Consts {
 
     @Override
     public void mapGenerationStarted(int canvasWidth, int canvasHeight) {
-        width = canvasWidth / zoom;    // Ширина доступной части экрана для рисования карты
-        height = canvasHeight / zoom;
+        width = (int)(1.0f * canvasWidth / zoom / 100 * worldScale);    // Ширина доступной части экрана для рисования карты
+        height = (int)(1.0f * canvasHeight / zoom / 100 * worldScale);
         generateMap((int) (Math.random() * 10000));
         generateAdam();
         paintMapView();
@@ -87,6 +102,16 @@ public class World implements GuiCallback,Consts {
     @Override
     public void viewModeChanged(int viewMode) {
         this.viewMode = viewMode;
+    }
+
+    @Override
+    public void setWorldScale(int worldScale) {
+        this.worldScale = worldScale;
+    }
+
+    @Override
+    public void setPerlin(int perlin) {
+        this.perlinValue = perlin;
     }
 
     public void paintMapView() {
@@ -143,11 +168,11 @@ public class World implements GuiCallback,Consts {
                 } else if (viewMode == VIEW_MODE_ENERGY) {
                     mapgreen = 255 - (int) (currentbot.health * 0.25);
                     if (mapgreen < 0) mapgreen = 0;
-                    rgb[currentbot.y * width + currentbot.x] = (255 << 24) | (255 << 16) | (mapgreen << 8) | 0;
+                    rgb[currentbot.y * width + currentbot.x] = (255 << 24) | (255 << 16) | (mapgreen << 8);
                 } else if (viewMode == VIEW_MODE_MINERAL) {
                     mapblue = 255 - (int) (currentbot.mineral * 0.5);
                     if (mapblue < 0) mapblue = 0;
-                    rgb[currentbot.y * width + currentbot.x] = (255 << 24) | (0 << 16) | (255 << 8) | mapblue;
+                    rgb[currentbot.y * width + currentbot.x] = (255 << 24) | (0) | (255 << 8) | mapblue;
                 } else if (viewMode == VIEW_MODE_COMBINED) {
                     mapgreen = (int) (currentbot.c_green * (1 - currentbot.health * 0.0005));
                     if (mapgreen < 0) mapgreen = 0;
@@ -156,7 +181,7 @@ public class World implements GuiCallback,Consts {
                 } else if (viewMode == VIEW_MODE_AGE) {
                     mapred = 255 - (int) (Math.sqrt(currentbot.age) * 4);
                     if (mapred < 0) mapred = 0;
-                    rgb[currentbot.y * width + currentbot.x] = (255 << 24) | (mapred << 16) | (0 << 8) | 255;
+                    rgb[currentbot.y * width + currentbot.x] = (255 << 24) | (mapred << 16) | (0) | 255;
                 } else if (viewMode == VIEW_MODE_FAMILY) {
                     rgb[currentbot.y * width + currentbot.x] = currentbot.c_family;
                 }
@@ -185,9 +210,13 @@ public class World implements GuiCallback,Consts {
 
         g.drawImage(image, 0, 0, null);
 
-        gui.generationLabel.setText(" Generation: " + String.valueOf(generation));
-        gui.populationLabel.setText(" Population: " + String.valueOf(population));
-        gui.organicLabel.setText(" Organic: " + String.valueOf(organic));
+        gui.generationLabel.setText(" Generation: " + generation);
+        gui.populationLabel.setText(" Population: " + population);
+        gui.organicLabel.setText(" Organic: " + organic);
+        gui.familiesLabel.setText(" Families: " + CommonConsts.familiesCount.size());
+        gui.strainsLabel.setText(" Stable: " + stableStrainCount);
+        gui.deadStrainsLabel.setText(" Dead: " + deadStrainCount);
+        gui.mutationsLabel.setText(" Mutations: " + mutationsCount);
 
         gui.buffer = buf;
         gui.canvas.repaint();
@@ -210,6 +239,16 @@ public class World implements GuiCallback,Consts {
                     paint1();                           // отображаем текущее состояние симуляции на экран
                 }
                 long time3 = System.currentTimeMillis();
+
+                for (Strain s:AllStrains)
+                    if (!s.isAliveStrain() && s.isStableStrain())
+                        strainDied(s);
+
+                Predicate<Strain> isDead = strain -> !strain.isAliveStrain();
+                AllStrains.removeIf(isDead);
+
+                stableStrainCount = (int) AllStrains.stream().filter(Strain::isStableStrain).count();
+                deadStrainCount = deadStrains.size();
 //                System.out.println("Paint: " + (time3-time2));
             }
             started = false;        // Закончили работу
@@ -244,7 +283,7 @@ public class World implements GuiCallback,Consts {
         Perlin2D perlin = new Perlin2D(seed);
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                float f = (float) gui.perlinSlider.getValue();
+                float f = (float) perlinValue;
                 float value = perlin.getNoise(x/f,y/f,8,0.45f);        // вычисляем точку ландшафта
                 map[x][y] = (int)(value * 255 + 128) & 255;
             }
@@ -255,6 +294,13 @@ public class World implements GuiCallback,Consts {
                 mapInGPU[j*width+i] = map[i][j];
             }
         }
+        CommonConsts.regenerate();
+        CommonConsts.clearFamilies();
+        AllStrains.clear();
+        stableStrainCount = 0;
+        deadStrains.clear();
+        deadStrainCount = 0;
+        mutationsCount = 0;
     }
 
     // генерируем первого бота
@@ -274,6 +320,7 @@ public class World implements GuiCallback,Consts {
         bot.c_red = 170;        // задаем цвет бота
         bot.c_blue = 170;
         bot.c_green = 170;
+        bot.c_family = bot.get_c_family();
         bot.direction = 5;      // направление
         bot.prev = zerobot;     // ссылка на предыдущего
         bot.next = zerobot;     // ссылка на следующего
@@ -282,8 +329,22 @@ public class World implements GuiCallback,Consts {
         }
 
         matrix[bot.x][bot.y] = bot;             // помещаем бота в матрицу
+        CommonConsts.familiesCount.put(bot.get_c_family(), 1);
         currentbot = bot;                       // устанавливаем текущим
+        createNewStrain(bot);
     }
 
+    public Strain createNewStrain(Bot bot){
+        Strain newStrain = new Strain(generation, bot);
+        bot.setStrain(newStrain);
+        AllStrains.add(newStrain);
+        mutationsCount++;
+        return newStrain;
+    }
+
+    public void strainDied(Strain deadStrain){
+        DeadStrainStat ds = new DeadStrainStat(deadStrain);
+        deadStrains.add(ds);
+    }
 
 }

@@ -1,3 +1,6 @@
+import java.util.Arrays;
+import java.util.List;
+
 public class Utils {
     public static void joinSafe(Thread thread) {
         try {
@@ -7,4 +10,7 @@ public class Utils {
         }
     }
 
+    public static double AverageOfArray(Integer [] array) {
+        return Arrays.stream(array).mapToInt(Integer::intValue).average().orElse(Double.NaN);
+    }
 }

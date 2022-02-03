@@ -20,6 +20,10 @@ public class Gui extends JFrame implements Consts {
     JLabel generationLabel = new JLabel(" Generation: 0 ");
     JLabel populationLabel = new JLabel(" Population: 0 ");
     JLabel organicLabel = new JLabel(" Organic: 0 ");
+    JLabel familiesLabel = new JLabel("Families: 0");
+    JLabel strainsLabel = new JLabel("Stable: 0");
+    JLabel deadStrainsLabel = new JLabel("Dead: 0");
+    JLabel mutationsLabel = new JLabel("Mutations: 0");
 
     public static final Map<String,Integer> VIEW_MODE_MAP = new HashMap<>();
     static {
@@ -39,7 +43,9 @@ public class Gui extends JFrame implements Consts {
     private final JRadioButton ageButton = new JRadioButton("Age", false);
     private final JRadioButton familyButton = new JRadioButton("Family", false);
 
-    JSlider perlinSlider = new JSlider (JSlider.HORIZONTAL, 0, 480, 300);
+    private final JLabel mapSizePercentLabel = new JLabel(wmspText + "100");
+    private final JSlider mapSizeSlider = new JSlider(JSlider.HORIZONTAL, 1, 100, 100);
+    private final JSlider perlinSlider = new JSlider (JSlider.HORIZONTAL, 0, 480, 300);
     private final JButton mapButton = new JButton("Create Map");
     private final JSlider sealevelSlider = new JSlider (JSlider.HORIZONTAL, 0, 256, 145);
     private final JButton startButton = new JButton("Start/Stop");
@@ -81,12 +87,35 @@ public class Gui extends JFrame implements Consts {
         organicLabel.setPreferredSize(new Dimension(140, 18));
         organicLabel.setBorder(BorderFactory.createLoweredBevelBorder());
         statusPanel.add(organicLabel);
+        familiesLabel.setPreferredSize(new Dimension(140, 18));
+        familiesLabel.setBorder(BorderFactory.createLoweredBevelBorder());
+        statusPanel.add(familiesLabel);
+        strainsLabel.setPreferredSize(new Dimension(140, 18));
+        strainsLabel.setBorder(BorderFactory.createLoweredBevelBorder());
+        statusPanel.add(strainsLabel);
+        deadStrainsLabel.setPreferredSize(new Dimension(140, 18));
+        deadStrainsLabel.setBorder(BorderFactory.createLoweredBevelBorder());
+        statusPanel.add(deadStrainsLabel);
+        mutationsLabel.setPreferredSize(new Dimension(140, 18));
+        mutationsLabel.setBorder(BorderFactory.createLoweredBevelBorder());
+        statusPanel.add(mutationsLabel);
+
 
         JToolBar toolbar = new JToolBar();
-        toolbar.setOrientation(1);
+        toolbar.setOrientation(SwingConstants.VERTICAL);
 //        toolbar.setBorderPainted(true);
 //        toolbar.setBorder(BorderFactory.createLoweredBevelBorder());
         container.add(toolbar, BorderLayout.WEST);
+
+        toolbar.add(mapSizePercentLabel);
+
+        mapSizeSlider.setMajorTickSpacing(50);
+        mapSizeSlider.setMinorTickSpacing(25);
+        mapSizeSlider.setPaintTicks(true);
+        mapSizeSlider.setPaintLabels(true);
+        mapSizeSlider.setPreferredSize(new Dimension(100, mapSizeSlider.getPreferredSize().height));
+        mapSizeSlider.setAlignmentX(JComponent.LEFT_ALIGNMENT);
+        toolbar.add(mapSizeSlider);
 
         JLabel slider1Label = new JLabel("Map scale");
         toolbar.add(slider1Label);
@@ -141,6 +170,13 @@ public class Gui extends JFrame implements Consts {
         this.setVisible(true);
         setExtendedState(MAXIMIZED_BOTH);
 
+        mapSizeSlider.addChangeListener(e -> {
+            int ws = mapSizeSlider.getValue();
+            if (ws==0) ws=1;
+            mapSizePercentLabel.setText(wmspText + ws);
+            guiCallback.setWorldScale(ws);
+        });
+
         drawstepSlider.addChangeListener(e -> {
             int ds = drawstepSlider.getValue();
             if (ds == 0) ds = 1;
@@ -153,6 +189,7 @@ public class Gui extends JFrame implements Consts {
 
         startButton.addActionListener(e -> {
             boolean started = guiCallback.startedOrStopped();
+            mapSizeSlider.setEnabled(!started);
             perlinSlider.setEnabled(!started);
             mapButton.setEnabled(!started);
         });
