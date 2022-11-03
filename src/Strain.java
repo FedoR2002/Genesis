@@ -1,5 +1,4 @@
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class Strain {
@@ -84,5 +83,9 @@ public class Strain {
         for (Bot currBot:currentBots) {
             currBot.step();
         }
+    }
+
+    public boolean containsBot(Bot bot) {
+        return currentBots.contains(bot);
     }
 }

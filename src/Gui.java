@@ -25,7 +25,8 @@ public class Gui extends JFrame implements Consts {
     JLabel deadStrainsLabel = new JLabel("Dead: 0");
     JLabel mutationsLabel = new JLabel("Mutations: 0");
 
-    public static final Map<String,Integer> VIEW_MODE_MAP = new HashMap<>();
+    public static final Map<String, Integer> VIEW_MODE_MAP = new HashMap<>();
+
     static {
         VIEW_MODE_MAP.put("Base", VIEW_MODE_BASE);
         VIEW_MODE_MAP.put("Combined", VIEW_MODE_COMBINED);
@@ -44,12 +45,12 @@ public class Gui extends JFrame implements Consts {
     private final JRadioButton familyButton = new JRadioButton("Family", false);
 
     private final JLabel mapSizePercentLabel = new JLabel(wmspText + "100");
-    private final JSlider mapSizeSlider = new JSlider(JSlider.HORIZONTAL, 1, 100, 100);
-    private final JSlider perlinSlider = new JSlider (JSlider.HORIZONTAL, 0, 480, 300);
+    private final JSlider mapSizeSlider = new JSlider(JSlider.HORIZONTAL, 1, 10, 1);
+    private final JSlider perlinSlider = new JSlider(JSlider.HORIZONTAL, 0, 480, 300);
     private final JButton mapButton = new JButton("Create Map");
-    private final JSlider sealevelSlider = new JSlider (JSlider.HORIZONTAL, 0, 256, 145);
+    private final JSlider sealevelSlider = new JSlider(JSlider.HORIZONTAL, 0, 256, 145);
     private final JButton startButton = new JButton("Start/Stop");
-    private final JSlider drawstepSlider = new JSlider (JSlider.HORIZONTAL, 0, 40, 10);
+    private final JSlider drawstepSlider = new JSlider(JSlider.HORIZONTAL, 0, 40, 10);
 
     private final GuiCallback guiCallback;
 
@@ -62,11 +63,11 @@ public class Gui extends JFrame implements Consts {
         setSize(new Dimension(1800, 900));
         Dimension sSize = Toolkit.getDefaultToolkit().getScreenSize(), fSize = getSize();
         if (fSize.height > sSize.height) fSize.height = sSize.height;
-        if (fSize.width  > sSize.width) fSize.width = sSize.width;
+        if (fSize.width > sSize.width) fSize.width = sSize.width;
         //setLocation((sSize.width - fSize.width)/2, (sSize.height - fSize.height)/2);
         setSize(new Dimension(sSize.width, sSize.height));
 
-        setDefaultCloseOperation (WindowConstants.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         Container container = getContentPane();
 
         paintPanel.setLayout(new BorderLayout());// у этого лейаута приятная особенность - центральная часть растягивается автоматически
@@ -109,8 +110,8 @@ public class Gui extends JFrame implements Consts {
 
         toolbar.add(mapSizePercentLabel);
 
-        mapSizeSlider.setMajorTickSpacing(50);
-        mapSizeSlider.setMinorTickSpacing(25);
+        mapSizeSlider.setMajorTickSpacing(5);
+        mapSizeSlider.setMinorTickSpacing(2);
         mapSizeSlider.setPaintTicks(true);
         mapSizeSlider.setPaintLabels(true);
         mapSizeSlider.setPreferredSize(new Dimension(100, mapSizeSlider.getPreferredSize().height));
@@ -172,7 +173,7 @@ public class Gui extends JFrame implements Consts {
 
         mapSizeSlider.addChangeListener(e -> {
             int ws = mapSizeSlider.getValue();
-            if (ws==0) ws=1;
+            if (ws == 0) ws = 1;
             mapSizePercentLabel.setText(wmspText + ws);
             guiCallback.setWorldScale(ws);
         });

@@ -10,4 +10,12 @@ public interface Consts {
 
     // strain
     int STRAIN_STABLE_THRESHOLD = 200;
+
+    int MAX_BOT_HP = 1000;
+    int MIND_SIZE = 64;
+
+    float SUN2HP_COEFF = 1;
+    float MIN2HP_COEFF = 1;
+    float ORG2HP_COEFF = 1;
+
 }

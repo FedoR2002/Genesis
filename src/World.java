@@ -8,6 +8,7 @@ import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.function.Predicate;
 //import java.util.concurrent.locks.Lock;
@@ -15,16 +16,17 @@ import java.util.function.Predicate;
 
 
 // Основной класс программы.
-public class World implements GuiCallback,Consts {
+public class World implements GuiCallback, Consts {
 
     int width;
     int height;
-    private final int zoom;
+    private int zoom;
     private int perlinValue;
     private int worldScale;
     int sealevel;
     private int drawstep;
     int[][] map;    //Карта мира
+    MapItem[][] worldMap;
     private int[] mapInGPU;    //Карта для GPU
     private Image mapbuffer = null;
     Bot[][] matrix;    //Матрица мира
@@ -57,7 +59,7 @@ public class World implements GuiCallback,Consts {
         drawstep = 10;
         gui = new Gui(this);
         gui.init();
-        AllStrains = new ArrayList<>();
+        AllStrains = new LinkedList<>();
         deadStrains = new ArrayList<>();
     }
 
@@ -68,8 +70,8 @@ public class World implements GuiCallback,Consts {
 
     @Override
     public void mapGenerationStarted(int canvasWidth, int canvasHeight) {
-        width = (int)(1.0f * canvasWidth / zoom / 100 * worldScale);    // Ширина доступной части экрана для рисования карты
-        height = (int)(1.0f * canvasHeight / zoom / 100 * worldScale);
+        width = (int) (1.0f * canvasWidth / zoom);    // Ширина доступной части экрана для рисования карты
+        height = (int) (1.0f * canvasHeight / zoom);
         generateMap((int) (Math.random() * 10000));
         generateAdam();
         paintMapView();
@@ -87,8 +89,8 @@ public class World implements GuiCallback,Consts {
 
     @Override
     public boolean startedOrStopped() {
-        if(thread==null) {
-            thread	= new Worker(); // создаем новый поток
+        if (thread == null) {
+            thread = new Worker(); // создаем новый поток
             thread.start();
             return true;
         } else {
@@ -106,7 +108,7 @@ public class World implements GuiCallback,Consts {
 
     @Override
     public void setWorldScale(int worldScale) {
-        this.worldScale = worldScale;
+        this.zoom = worldScale;
     }
 
     @Override
@@ -132,8 +134,8 @@ public class World implements GuiCallback,Consts {
                 if (mapgreen < 10) mapgreen = 10;
                 if (mapblue < 20) mapblue = 20;
             } else {                                        // надводная часть
-                mapred = (int)(150 + (mapInGPU[i] - sealevel) * 2.5);
-                mapgreen = (int)(100 + (mapInGPU[i] - sealevel) * 2.6);
+                mapred = (int) (150 + (mapInGPU[i] - sealevel) * 2.5);
+                mapgreen = (int) (100 + (mapInGPU[i] - sealevel) * 2.6);
                 mapblue = 50 + (mapInGPU[i] - sealevel) * 3;
                 if (mapred > 255) mapred = 255;
                 if (mapgreen > 255) mapgreen = 255;
@@ -147,7 +149,7 @@ public class World implements GuiCallback,Consts {
     }
 
 
-//    @Override
+    //    @Override
     public void paint1() {
 
         Image buf = gui.canvas.createImage(width * zoom, height * zoom); //Создаем временный буфер для рисования
@@ -224,9 +226,10 @@ public class World implements GuiCallback,Consts {
 
     class Worker extends Thread {
         public void run() {
-            started	= true;         // Флаг работы потока, если false  поток заканчивает работу
+            started = true;         // Флаг работы потока, если false  поток заканчивает работу
             while (started) {       // обновляем матрицу
                 long time1 = System.currentTimeMillis();
+
                 while (currentbot != zerobot) {
                     if (currentbot.alive == 3) currentbot.step();
                     currentbot = currentbot.next;
@@ -240,9 +243,8 @@ public class World implements GuiCallback,Consts {
                 }
                 long time3 = System.currentTimeMillis();
 
-                for (Strain s:AllStrains)
-                    if (!s.isAliveStrain() && s.isStableStrain())
-                        strainDied(s);
+                for (Strain s : AllStrains)
+                    if (!s.isAliveStrain() && s.isStableStrain()) strainDied(s);
 
                 Predicate<Strain> isDead = strain -> !strain.isAliveStrain();
                 AllStrains.removeIf(isDead);
@@ -279,19 +281,31 @@ public class World implements GuiCallback,Consts {
         generation = 0;
         this.map = new int[width][height];
         this.matrix = new Bot[width][height];
+        this.worldMap = new MapItem[width][height];
 
         Perlin2D perlin = new Perlin2D(seed);
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
+                worldMap[x][y] = new MapItem();
                 float f = (float) perlinValue;
-                float value = perlin.getNoise(x/f,y/f,8,0.45f);        // вычисляем точку ландшафта
-                map[x][y] = (int)(value * 255 + 128) & 255;
+                float value = perlin.getNoise(x / f, y / f, 8, 0.45f);        // вычисляем точку ландшафта
+                map[x][y] = (int) (value * 255 + 128) & 255;
+                worldMap[x][y].level = map[x][y];
+                // set solar power
+                if ((worldMap[x][y].level > sealevel) && (worldMap[x][y].level <= sealevel + 100))
+                    worldMap[x][y].sunPower = (int) ((sealevel + 100 - worldMap[x][y].level) * 0.2); // формула вычисления энергии
+                if ((worldMap[x][y].level > sealevel - 50) && (worldMap[x][y].level <= sealevel))
+                    worldMap[x][y].sunPower = (int) ((worldMap[x][y].level - sealevel + 50) * 0.1); // формула вычисления энергии
+                // set mineral level
+                if ((worldMap[x][y].level > sealevel - 50) && (worldMap[x][y].level <= sealevel))
+                    worldMap[x][y].mineralLevel = (int) ((sealevel - worldMap[x][y].level) * 0.2); // формула вычисления минералов
+
             }
         }
         mapInGPU = new int[width * height];
-        for (int i=0; i<width; i++) {
-            for(int j=0; j<height; j++) {
-                mapInGPU[j*width+i] = map[i][j];
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                mapInGPU[j * width + i] = map[i][j];
             }
         }
         CommonConsts.regenerate();
@@ -328,13 +342,13 @@ public class World implements GuiCallback,Consts {
             bot.mind[i] = 32;
         }
 
-        matrix[bot.x][bot.y] = bot;             // помещаем бота в матрицу
+        worldMap[bot.x][bot.y].bot = bot;             // помещаем бота в матрицу
         CommonConsts.familiesCount.put(bot.get_c_family(), 1);
         currentbot = bot;                       // устанавливаем текущим
         createNewStrain(bot);
     }
 
-    public Strain createNewStrain(Bot bot){
+    public Strain createNewStrain(Bot bot) {
         Strain newStrain = new Strain(generation, bot);
         bot.setStrain(newStrain);
         AllStrains.add(newStrain);
@@ -342,7 +356,7 @@ public class World implements GuiCallback,Consts {
         return newStrain;
     }
 
-    public void strainDied(Strain deadStrain){
+    public void strainDied(Strain deadStrain) {
         DeadStrainStat ds = new DeadStrainStat(deadStrain);
         deadStrains.add(ds);
     }
