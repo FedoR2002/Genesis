@@ -1,10 +1,4 @@
-import javax.swing.*;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
-
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 import java.util.ArrayList;
@@ -167,7 +161,7 @@ public class World implements GuiCallback, Consts {
             if (currentbot.alive == 3) {                      // живой бот
                 if (viewMode == VIEW_MODE_BASE) {
                     rgb[currentbot.y * width + currentbot.x] = (255 << 24) | (currentbot.c_red << 16) | (currentbot.c_green << 8) | currentbot.c_blue;
-                } else if (viewMode == VIEW_MODE_ENERGY) {
+                } else if (viewMode == VIEW_MODE_HP) {
                     mapgreen = 255 - (int) (currentbot.health * 0.25);
                     if (mapgreen < 0) mapgreen = 0;
                     rgb[currentbot.y * width + currentbot.x] = (255 << 24) | (255 << 16) | (mapgreen << 8);

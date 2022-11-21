@@ -30,7 +30,7 @@ public class Gui extends JFrame implements Consts {
     static {
         VIEW_MODE_MAP.put("Base", VIEW_MODE_BASE);
         VIEW_MODE_MAP.put("Combined", VIEW_MODE_COMBINED);
-        VIEW_MODE_MAP.put("Energy", VIEW_MODE_ENERGY);
+        VIEW_MODE_MAP.put("Energy", VIEW_MODE_HP);
         VIEW_MODE_MAP.put("Minerals", VIEW_MODE_MINERAL);
         VIEW_MODE_MAP.put("Age", VIEW_MODE_AGE);
         VIEW_MODE_MAP.put("Family", VIEW_MODE_FAMILY);
