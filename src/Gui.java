@@ -6,6 +6,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static javax.swing.SwingConstants.WEST;
+
 public class Gui extends JFrame implements Consts {
 
     Image buffer = null;
@@ -26,21 +28,34 @@ public class Gui extends JFrame implements Consts {
     JLabel mutationsLabel = new JLabel("Mutations: 0");
 
     public static final Map<String, Integer> VIEW_MODE_MAP = new HashMap<>();
+    public static final Map<String, Integer> VIEW_MODE_MAP_BOT = new HashMap<>();
 
     static {
-        VIEW_MODE_MAP.put("Base", VIEW_MODE_BASE);
-        VIEW_MODE_MAP.put("Combined", VIEW_MODE_COMBINED);
-        VIEW_MODE_MAP.put("Energy", VIEW_MODE_HP);
+        VIEW_MODE_MAP.put("Height", VIEW_MODE_HEIGHT);
+        VIEW_MODE_MAP.put("Solar", VIEW_MODE_SOLAR);
         VIEW_MODE_MAP.put("Minerals", VIEW_MODE_MINERAL);
-        VIEW_MODE_MAP.put("Age", VIEW_MODE_AGE);
-        VIEW_MODE_MAP.put("Family", VIEW_MODE_FAMILY);
+        VIEW_MODE_MAP.put("Radiation", VIEW_MODE_RADIATION);
+        VIEW_MODE_MAP.put("Organics", VIEW_MODE_ORGANICS);
     }
+
+    static {
+        VIEW_MODE_MAP_BOT.put("Base", VIEW_MODE_BOT_BASE);
+        VIEW_MODE_MAP_BOT.put("Combined", VIEW_MODE_BOT_COMBINED);
+        VIEW_MODE_MAP_BOT.put("HP", VIEW_MODE_BOT_HP);
+        VIEW_MODE_MAP_BOT.put("Age", VIEW_MODE_BOT_AGE);
+        VIEW_MODE_MAP_BOT.put("Family", VIEW_MODE_BOT_FAMILY);
+    }
+
+    private final JRadioButton heightButton = new JRadioButton("Height", true);
+    private final JRadioButton solarButton = new JRadioButton("Solar", false);
+    private final JRadioButton mineralButton = new JRadioButton("Minerals", false);
+    private final JRadioButton radiationButton = new JRadioButton("Radiation", false);
+    private final JRadioButton organicsButton = new JRadioButton("Organics", false);
 
 
     private final JRadioButton baseButton = new JRadioButton("Base", true);
     private final JRadioButton combinedButton = new JRadioButton("Combined", false);
-    private final JRadioButton energyButton = new JRadioButton("Energy", false);
-    private final JRadioButton mineralButton = new JRadioButton("Minerals", false);
+    private final JRadioButton hpButton = new JRadioButton("HP", false);
     private final JRadioButton ageButton = new JRadioButton("Age", false);
     private final JRadioButton familyButton = new JRadioButton("Family", false);
 
@@ -160,12 +175,27 @@ public class Gui extends JFrame implements Consts {
         drawstepSlider.setAlignmentX(JComponent.LEFT_ALIGNMENT);
         toolbar.add(drawstepSlider);
 
-        ButtonGroup group = new ButtonGroup();
-        List<AbstractButton> radioButtons = Arrays.asList(baseButton, combinedButton, energyButton, mineralButton, ageButton, familyButton);
-        for (AbstractButton radioButton : radioButtons) {
-            group.add(radioButton);
-            toolbar.add(radioButton);
+        JToolBar mapTB=new JToolBar();
+        mapTB.setOrientation(SwingConstants.VERTICAL);
+
+        ButtonGroup mapGroup = new ButtonGroup();
+        List<AbstractButton> mapRadioButtons = Arrays.asList(heightButton, solarButton, mineralButton, radiationButton, organicsButton);
+        for (AbstractButton radioButton : mapRadioButtons) {
+            mapGroup.add(radioButton);
+            mapTB.add(radioButton);
         }
+
+        JToolBar botTB=new JToolBar();
+        botTB.setOrientation(SwingConstants.VERTICAL);
+
+        ButtonGroup botGroup = new ButtonGroup();
+        List<AbstractButton> botRadioButtons = Arrays.asList(baseButton, combinedButton, hpButton, ageButton, familyButton);
+        for (AbstractButton radioButton : botRadioButtons) {
+            botGroup.add(radioButton);
+            botTB.add(radioButton);
+        }
+        toolbar.add(mapTB, WEST);
+        toolbar.add(botTB, WEST);
 
         this.pack();
         this.setVisible(true);
@@ -195,16 +225,28 @@ public class Gui extends JFrame implements Consts {
             mapButton.setEnabled(!started);
         });
 
-        ActionListener radioListener = e -> {
+        ActionListener mapRadioListener = e -> {
             String action = e.getActionCommand();
             Integer mode = VIEW_MODE_MAP.get(action);
             if (mode != null) {
-                guiCallback.viewModeChanged(mode);
+                guiCallback.viewModeMapChanged(mode);
             }
         };
 
-        for (AbstractButton radioButton : radioButtons) {
-            radioButton.addActionListener(radioListener);
+        for (AbstractButton radioButton : mapRadioButtons) {
+            radioButton.addActionListener(mapRadioListener);
+        }
+
+        ActionListener botRadioListener = e -> {
+            String action = e.getActionCommand();
+            Integer mode = VIEW_MODE_MAP_BOT.get(action);
+            if (mode != null) {
+                guiCallback.viewModeBotChanged(mode);
+            }
+        };
+
+        for (AbstractButton radioButton : botRadioButtons) {
+            radioButton.addActionListener(botRadioListener);
         }
     }
 }

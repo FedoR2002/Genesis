@@ -3,7 +3,8 @@ public interface GuiCallback {
     void mapGenerationStarted(int canvasWidth, int canvasHeight);
     void seaLevelChanged(int value);
     boolean startedOrStopped();
-    void viewModeChanged(int viewMode);
+    void viewModeBotChanged(int viewModeBot);
+    void viewModeMapChanged(int viewModeMap);
     void setWorldScale(int worldScale);
     void setPerlin(int perlin);
 }

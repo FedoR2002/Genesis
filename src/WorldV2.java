@@ -5,6 +5,7 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -23,7 +24,13 @@ public class WorldV2 implements GuiCallback {
     private PlaceProp[][] mapObjectsLayer;
     private UUID[][] mapBotsLayer;
     private ConcurrentMap<UUID, BotV2> allBots = new ConcurrentHashMap<>();
-    private LinkedList<UUID> botsLinkedList = new LinkedList<>();
+    private List<UUID> botsLinkedList = new LinkedList<>();
+    int maxsunpower = 0;
+    int maxminerals = 0;
+
+    List<StrainV2> allStrains = new ArrayList<>();
+    List<StrainV2> liveStrains = new ArrayList<>();
+    List<StrainV2> deadStrains = new ArrayList<>();
 
     private int mutation_count=0;
     private int drawstep=10;
@@ -31,7 +38,8 @@ public class WorldV2 implements GuiCallback {
     private int sealevel=145;
     private int population;
     private int organic;
-    private int viewMode;
+    private int viewModeMap;
+    private int viewModeBot;
     private int generation;
 
 
@@ -40,6 +48,9 @@ public class WorldV2 implements GuiCallback {
 
     public int getMutation_count(){return mutation_count;}
     public void incMutation_count(){mutation_count++;}
+
+
+
 
     private WorldV2() {
         zoom = 1;
@@ -79,6 +90,19 @@ public class WorldV2 implements GuiCallback {
 
         UUID botUID = mapBotsLayer[xx][yy];
         // remove bot from arrays
+        BotV2 botToEliminate = allBots.get(botUID);
+        UUID strainID = botToEliminate.getPopulationid();
+        for (StrainV2 strain:liveStrains) {
+            if (strainID.equals(strain.getPopulationId())){
+                strain.removeBot(botToEliminate);
+                if (strain.isDead()) {
+                    deadStrains.add(strain);
+                    liveStrains.remove(strain);
+                }
+                break;
+            }
+        }
+
         if (botsLinkedList.contains(botUID)){
             botsLinkedList.remove(botUID);
             // common array
@@ -90,6 +114,8 @@ public class WorldV2 implements GuiCallback {
     public BotV2 getBotAtPos(MapPosition pos) {
         int xx = pos.x % width;
         int yy = pos.y % height;
+        if (xx<0) xx += width;
+        if (yy<0) yy += height;
         if (botsLinkedList.contains(mapBotsLayer[xx][yy]))
             return allBots.get(mapBotsLayer[xx][yy]);
 
@@ -100,6 +126,8 @@ public class WorldV2 implements GuiCallback {
     public MapPosition moveBot(MapPosition position, MapPosition targetPos) {
         int xx = targetPos.x % width;
         int yy = targetPos.y % height;
+        if (xx<0) xx += width;
+        if (yy<0) yy += height;
         mapBotsLayer[xx][yy] = mapBotsLayer[position.x][position.y];
         mapBotsLayer[position.x][position.y] = null;
         return new MapPosition(xx,yy);
@@ -108,6 +136,8 @@ public class WorldV2 implements GuiCallback {
     public boolean checkBotAtPos(MapPosition viewPoint) {
         int xx = viewPoint.x % width;
         int yy = viewPoint.y % height;
+        if (xx<0) xx += width;
+        if (yy<0) yy += height;
 
         if (botsLinkedList.contains(mapBotsLayer[xx][yy]))
             return mapBotsLayer[xx][yy]!=null;
@@ -125,11 +155,14 @@ public class WorldV2 implements GuiCallback {
             return null;
         }
         newBot.setHP(i);
-        newBot.setPosition(viewPoint);
+
 
         int xx = viewPoint.x % width;
         int yy = viewPoint.y % height;
-            UUID nbuid = UUID.randomUUID();
+        if (xx<0) xx += width;
+        if (yy<0) yy += height;
+        newBot.setPosition(new MapPosition(xx,yy));
+        UUID nbuid = UUID.randomUUID();
         while (botsLinkedList.contains(nbuid))
             nbuid = UUID.randomUUID();
         botsLinkedList.add(nbuid);
@@ -141,13 +174,22 @@ public class WorldV2 implements GuiCallback {
     public void createNewBot(BotV2 botV2, int i, MapPosition viewPoint, byte[] new_genom) {
         BotV2 newBot = createNewBot(botV2, i, viewPoint);
         if (newBot == null) return;
+        int new_st_color = BotV2.mutate_color(newBot.getStrain_color());
+        newBot.setStrain_color(new_st_color);
         newBot.setBot_genom(new_genom);
+        StrainV2 newStrain = new StrainV2(newBot);
+        newBot.setPopulationid(newStrain.getPopulationId());
+        allStrains.add(newStrain);
+        liveStrains.add(newStrain);
     }
 
     private void clearMapItems(){
         for (UUID botuid:botsLinkedList) {
             eliminateBot(allBots.get(botuid).getPosition());
         }
+        liveStrains.clear();
+        deadStrains.clear();
+        allStrains.clear();
     }
 
     @Override
@@ -190,8 +232,17 @@ public class WorldV2 implements GuiCallback {
     }
 
     @Override
-    public void viewModeChanged(int viewMode) {
-        this.viewMode = viewMode;
+    public void viewModeMapChanged(int viewModeMap) {
+        this.viewModeMap = viewModeMap;
+        paintMapView();
+        paint1();
+    }
+
+    @Override
+    public void viewModeBotChanged(int viewModeBot) {
+        this.viewModeBot = viewModeBot;
+        paintMapView();
+        paint1();
     }
 
     @Override
@@ -206,7 +257,7 @@ public class WorldV2 implements GuiCallback {
 
     // генерируем карту
     public void generateMap(int seed) {
-        int generation = 0;
+        generation = 0;
         this.mapHeightLayer = new int[width][height];
         this.mapBotsLayer = new UUID[width][height];
         this.mapObjectsLayer = new PlaceProp[width][height];
@@ -214,6 +265,8 @@ public class WorldV2 implements GuiCallback {
         Perlin2D perlin = new Perlin2D(seed);
         int sunPower=0;
         int mineralLevel=0;
+        maxsunpower = 0;
+        maxminerals = 0;
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 mapObjectsLayer[x][y] = new PlaceProp();
@@ -226,12 +279,14 @@ public class WorldV2 implements GuiCallback {
                 if ((h > sealevel) && (h <= sealevel + 100))
                     sunPower = (int) ((sealevel + 100 - h) * 0.2); // формула вычисления энергии
                 if ((h > sealevel - 50) && (h <= sealevel))
-                    sunPower = (int) ((h - sealevel + 50) * 0.1); // формула вычисления энергии
+                    sunPower = (int) ((h - sealevel + 50) * 0.2); // формула вычисления энергии
                 mapObjectsLayer[x][y].setSunLevel(sunPower);
+                maxsunpower = Math.max(maxsunpower, sunPower);
                 // set mineral level
-                if ((h > sealevel - 50) && (h <= sealevel))
-                    mineralLevel = (int) ((sealevel - h) * 0.2); // формула вычисления минералов
+                if ((h > sealevel - 100) && (h <= sealevel+5))
+                    mineralLevel = (int) ((sealevel - h+5) * 0.2); // формула вычисления минералов
                 mapObjectsLayer[x][y].setMineralLevel(mineralLevel);
+                maxminerals = Math.max(maxminerals, mineralLevel);
 
             }
         }
@@ -244,6 +299,8 @@ public class WorldV2 implements GuiCallback {
         CommonConsts.regenerate();
         CommonConsts.clearFamilies();
 
+        System.out.println("max sun power:" + maxsunpower);
+        System.out.println("max minerals:" + maxminerals);
     }
 
     // генерируем первого бота
@@ -252,8 +309,12 @@ public class WorldV2 implements GuiCallback {
         BotV2 bot = new BotV2();
 
 //        bot.c_family = bot.get_c_family();
-        createNewBot(bot, 500, new MapPosition(width /2, height / 2));
-
+        BotV2 newBot = createNewBot(bot, 500, new MapPosition(width /2, height / 2));
+        newBot.setDefStrainColor();
+        StrainV2 strain=new StrainV2(newBot);
+        liveStrains.add(strain);
+        allStrains.add(strain);
+        newBot.setPopulationid(strain.getPopulationId());
 //        CommonConsts.familiesCount.put(bot.get_c_family(), 1);
 //        currentbot = bot;                       // устанавливаем текущим
 //        createNewStrain(bot);
@@ -270,21 +331,48 @@ public class WorldV2 implements GuiCallback {
         final int[] rgb = ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
 
         for (int i = 0; i < rgb.length; i++) {
-            if (mapInGPU[i] < sealevel) {                     // подводная часть
-                mapred = 5;
-                mapblue = 140 - (sealevel - mapInGPU[i]) * 3;
-                mapgreen = 150 - (sealevel - mapInGPU[i]) * 10;
-                if (mapgreen < 10) mapgreen = 10;
-                if (mapblue < 20) mapblue = 20;
-            } else {                                        // надводная часть
-                mapred = (int) (150 + (mapInGPU[i] - sealevel) * 2.5);
-                mapgreen = (int) (100 + (mapInGPU[i] - sealevel) * 2.6);
-                mapblue = 50 + (mapInGPU[i] - sealevel) * 3;
-                if (mapred > 255) mapred = 255;
-                if (mapgreen > 255) mapgreen = 255;
-                if (mapblue > 255) mapblue = 255;
+            switch (viewModeMap) {
+                case Consts.VIEW_MODE_HEIGHT: {
+                    if (mapInGPU[i] < sealevel) {                     // подводная часть
+                        mapred = 5;
+                        mapblue = 140 - (sealevel - mapInGPU[i]) * 3;
+                        mapgreen = 150 - (sealevel - mapInGPU[i]) * 10;
+                        if (mapgreen < 10) mapgreen = 10;
+                        if (mapblue < 20) mapblue = 20;
+                    } else {                                        // надводная часть
+                        mapred = (int) (150 + (mapInGPU[i] - sealevel) * 2.5);
+                        mapgreen = (int) (100 + (mapInGPU[i] - sealevel) * 2.6);
+                        mapblue = 50 + (mapInGPU[i] - sealevel) * 3;
+                        if (mapred > 255) mapred = 255;
+                        if (mapgreen > 255) mapgreen = 255;
+                        if (mapblue > 255) mapblue = 255;
+                    }
+                    rgb[i] = (mapred << 16) | (mapgreen << 8) | mapblue;
+                }
+                break;
+                case Consts.VIEW_MODE_SOLAR: {
+                    int x= i % width;
+                    int y = i / width;
+                    mapblue = 255;
+                    mapgreen = 0;
+                    int valueToDraw = mapObjectsLayer[x][y].getSunLevel();
+                    mapred = (int) valueToDraw * 255 / maxsunpower;
+                    rgb[i] = (mapred << 16) | (mapgreen << 8) | mapblue;
+
+                }
+                break;
+                case Consts.VIEW_MODE_MINERAL: {
+                    int x= i % width;
+                    int y = i / width;
+                    mapred = 0;
+                    mapgreen = 160;
+                    int valueToDraw = mapObjectsLayer[x][y].getMineralLevel();
+                    mapblue = (int) valueToDraw * 255 / maxminerals;
+                    rgb[i] = (mapred << 16) | (mapgreen << 8) | mapblue;
+
+                }
+                break;
             }
-            rgb[i] = (mapred << 16) | (mapgreen << 8) | mapblue;
         }
         g.drawImage(image, 0, 0, null);
     }
@@ -304,14 +392,21 @@ public class WorldV2 implements GuiCallback {
         organic = 0;
         int mapred, mapgreen, mapblue;
 
+
         for (UUID botuid:botsLinkedList) {
+            BotV2 currbot = null;
             try {
-                if (viewMode == Consts.VIEW_MODE_BASE) {
-                    rgb[allBots.get(botuid).getPosition().y * width + allBots.get(botuid).getPosition().x] = allBots.get(botuid).getColor();
-                } else if (viewMode == Consts.VIEW_MODE_HP) {
-                    mapgreen = 255 - (int) (allBots.get(botuid).getHP() * 0.25);
+                currbot = allBots.get(botuid);
+            }
+            catch (Exception e) {
+                continue;
+            }
+                if (viewModeBot == Consts.VIEW_MODE_BOT_BASE) {
+                    rgb[currbot.getPosition().y * width + currbot.getPosition().x] = currbot.getColor();
+                } else if (viewModeBot == Consts.VIEW_MODE_BOT_HP) {
+                    mapgreen = 255 - (int) (currbot.getHP() * 0.25);
                     if (mapgreen < 0) mapgreen = 0;
-                    rgb[allBots.get(botuid).getPosition().y * width + allBots.get(botuid).getPosition().x] = (255 << 24) | (0 << 16) | (mapgreen << 8);
+                    rgb[currbot.getPosition().y * width + currbot.getPosition().x] = (255 << 24) | (0 << 16) | (mapgreen << 8);
                 }
 //                    else if (viewMode == Consts.VIEW_MODE_MINERAL) {
 //                        mapblue = 255 - (int) (currentbot.mineral * 0.5);
@@ -324,19 +419,16 @@ public class WorldV2 implements GuiCallback {
 //                        mapblue = (int) (currentbot.c_blue * (0.8 - currentbot.mineral * 0.0005));
 //                        rgb[currentbot.y * width + currentbot.x] = (255 << 24) | (currentbot.c_red << 16) | (mapgreen << 8) | mapblue;
 //                    }
-                else if (viewMode == Consts.VIEW_MODE_AGE) {
-                    mapred = 255 - (int) (allBots.get(botuid).getAge() / 4);
+                else if (viewModeBot == Consts.VIEW_MODE_BOT_AGE) {
+                    mapred = 255 - (int) (currbot.getAge() / 4);
                     if (mapred < 0) mapred = 0;
-                    rgb[allBots.get(botuid).getPosition().y * width + allBots.get(botuid).getPosition().x] = (255 << 24) | (mapred << 16) | (0) | 255;
+                    rgb[currbot.getPosition().y * width + currbot.getPosition().x] = (255 << 24) | (mapred << 16) | (0) | 255;
                 }
-//                    else if (viewMode == VIEW_MODE_FAMILY) {
-//                        rgb[currentbot.y * width + currentbot.x] = currentbot.c_family;
-//                    }
+                    else if (viewModeBot == Consts.VIEW_MODE_BOT_FAMILY) {
+                        rgb[currbot.getPosition().y * width + currbot.getPosition().x] = currbot.getStrain_color();
+                    }
                 population++;
-            }
-            catch(Exception e) {
 
-            }
             // show map objects
         }
 
@@ -433,13 +525,22 @@ public class WorldV2 implements GuiCallback {
         gui.generationLabel.setText(" Generation: " + generation);
         gui.populationLabel.setText(" Population: " + population);
         gui.organicLabel.setText(" Organic: " + organic);
-        gui.familiesLabel.setText(" Families: " + CommonConsts.familiesCount.size());
-//        gui.strainsLabel.setText(" Stable: " + stableStrainCount);
-//        gui.deadStrainsLabel.setText(" Dead: " + deadStrainCount);
+        gui.familiesLabel.setText(" Strains: " + allStrains.size());
+        gui.strainsLabel.setText(" Alive: " + liveStrains.size());
+        gui.deadStrainsLabel.setText(" Dead: " + deadStrains.size());
         gui.mutationsLabel.setText(" Mutations: " + getMutation_count());
 
         gui.buffer = buf;
         gui.canvas.repaint();
+    }
+
+    public void addBotToStrain(UUID populationid, BotV2 newBot) {
+        for (StrainV2 strain:liveStrains) {
+            if (populationid.equals(strain.getPopulationId())){
+                strain.addBot(newBot);
+                break;
+            }
+        }
     }
 
 

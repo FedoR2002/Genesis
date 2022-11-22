@@ -31,7 +31,7 @@ public class World implements GuiCallback, Consts {
     int generation;
     private int population;
     private int organic;
-    private int viewMode = VIEW_MODE_BASE;
+    private int viewMode = VIEW_MODE_BOT_BASE;
 
     private final Image buffer = null;
 
@@ -98,8 +98,12 @@ public class World implements GuiCallback, Consts {
     }
 
     @Override
-    public void viewModeChanged(int viewMode) {
+    public void viewModeBotChanged(int viewModeBot) {
         this.viewMode = viewMode;
+    }
+    @Override
+    public void viewModeMapChanged(int viewModeMap) {
+
     }
 
     @Override
@@ -161,26 +165,26 @@ public class World implements GuiCallback, Consts {
 
         while (currentbot != zerobot) {
             if (currentbot.alive == 3) {                      // живой бот
-                if (viewMode == VIEW_MODE_BASE) {
+                if (viewMode == VIEW_MODE_BOT_BASE) {
                     rgb[currentbot.y * width + currentbot.x] = (255 << 24) | (currentbot.c_red << 16) | (currentbot.c_green << 8) | currentbot.c_blue;
-                } else if (viewMode == VIEW_MODE_HP) {
+                } else if (viewMode == VIEW_MODE_BOT_HP) {
                     mapgreen = 255 - (int) (currentbot.health * 0.25);
                     if (mapgreen < 0) mapgreen = 0;
                     rgb[currentbot.y * width + currentbot.x] = (255 << 24) | (255 << 16) | (mapgreen << 8);
-                } else if (viewMode == VIEW_MODE_MINERAL) {
+                } else if (viewMode == VIEW_MODE_BOT_MINERAL) {
                     mapblue = 255 - (int) (currentbot.mineral * 0.5);
                     if (mapblue < 0) mapblue = 0;
                     rgb[currentbot.y * width + currentbot.x] = (255 << 24) | (0) | (255 << 8) | mapblue;
-                } else if (viewMode == VIEW_MODE_COMBINED) {
+                } else if (viewMode == VIEW_MODE_BOT_COMBINED) {
                     mapgreen = (int) (currentbot.c_green * (1 - currentbot.health * 0.0005));
                     if (mapgreen < 0) mapgreen = 0;
                     mapblue = (int) (currentbot.c_blue * (0.8 - currentbot.mineral * 0.0005));
                     rgb[currentbot.y * width + currentbot.x] = (255 << 24) | (currentbot.c_red << 16) | (mapgreen << 8) | mapblue;
-                } else if (viewMode == VIEW_MODE_AGE) {
+                } else if (viewMode == VIEW_MODE_BOT_AGE) {
                     mapred = 255 - (int) (Math.sqrt(currentbot.age) * 4);
                     if (mapred < 0) mapred = 0;
                     rgb[currentbot.y * width + currentbot.x] = (255 << 24) | (mapred << 16) | (0) | 255;
-                } else if (viewMode == VIEW_MODE_FAMILY) {
+                } else if (viewMode == VIEW_MODE_BOT_FAMILY) {
                     rgb[currentbot.y * width + currentbot.x] = currentbot.c_family;
                 }
                 population++;

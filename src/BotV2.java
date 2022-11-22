@@ -1,6 +1,5 @@
-import javafx.scene.shape.MoveTo;
-
 import java.util.Arrays;
+import java.util.UUID;
 
 
 public class BotV2 implements Cloneable{
@@ -8,7 +7,7 @@ public class BotV2 implements Cloneable{
 
     // properties:
     // populationid
-    private int populationid;
+    private UUID populationid;
     // birth (tick)
     private long birthtick;
     private int age=0;
@@ -23,20 +22,28 @@ public class BotV2 implements Cloneable{
     public int getHP() {
         return hp;
     }
-
     public void setHP(int hp) {
         this.hp = hp;
     }
 
     public int getAge() {return age;}
-
     public void resetAge() {age=0;}
+
+    public UUID getPopulationid(){return populationid;}
+    public void setPopulationid(UUID populationid){this.populationid = populationid;}
+
     // color
     private int b_red = 170;
     private int b_blue = 170;
     private int b_green =170;
+
+    private int strain_color;
+    public int getStrain_color() {return strain_color;}
+    public void setDefStrainColor() {strain_color = (255 << 24) | (b_red << 16) | (b_green << 8) | b_blue;}
+    public void setStrain_color(int c) {strain_color = c;}
     // genom
     private byte[] bot_genom = new byte[Consts.MIND_SIZE];
+    public byte[] get_genom() {return bot_genom.clone();}
     // direction
     private int direction = 5;
     // position
@@ -141,7 +148,6 @@ public class BotV2 implements Cloneable{
     }
     // move 1 step
     private int botMoveTo(MapPosition targetPos){
-        System.out.println("MOVE!!!");
         if (bot_CheckAtView()==2)
             hp -=hp/4;
         else {
@@ -163,13 +169,14 @@ public class BotV2 implements Cloneable{
         for (int i=0;i<8;i++){
             if (!WorldV2.getInstance().checkBotAtPos(viewPoint())){
                 WorldV2.getInstance().incMutation_count();
-                if (WorldV2.getInstance().getMutation_count()%1000 == 0) {
+                if (WorldV2.getInstance().getMutation_count()%10000 == 0) {
                     byte[] new_genom = mutate_genom(3);
                     WorldV2.getInstance().createNewBot(this, hp/2, viewPoint(), new_genom);
                 }
-                else
-                    WorldV2.getInstance().createNewBot(this, hp/2, viewPoint());
-
+                else {
+                    BotV2 newBot = WorldV2.getInstance().createNewBot(this, hp / 2, viewPoint());
+                    WorldV2.getInstance().addBotToStrain(newBot.getPopulationid(), newBot);
+                }
                 break;
             }
             rotate();
@@ -185,7 +192,24 @@ public class BotV2 implements Cloneable{
             int shift = (int)(Math.random() * Consts.MIND_SIZE);
             new_genom[pos] = (byte)((new_genom[pos]+shift)%256);
         }
+
         return new_genom;
+    }
+
+    public static int mutate_color(int color){
+        int initcolor = color;
+        int stblue = initcolor % 256;
+        initcolor /=256;
+        int stgreen = initcolor % 256;
+        initcolor /=256;
+        int stred = initcolor % 256;
+        stred += 256 + 40 * (Math.round(Math.random() * 2)-1);
+        stgreen += 256 + 40 * (Math.round(Math.random() * 2)-1);
+        stblue += 256 + 40 * (Math.round(Math.random() * 2)-1);
+        stred = stred % 256;
+        stblue = stblue % 256;
+        stgreen = stgreen % 256;
+        return (stred << 16) | (stgreen << 8) | stblue;
     }
 
     // die
