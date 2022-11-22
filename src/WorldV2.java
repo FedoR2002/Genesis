@@ -1,9 +1,12 @@
+import Utils.CommonUtils;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 import java.util.*;
-import java.util.function.Predicate;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class WorldV2 implements GuiCallback {
 
@@ -19,12 +22,13 @@ public class WorldV2 implements GuiCallback {
     private int[][] mapHeightLayer;
     private PlaceProp[][] mapObjectsLayer;
     private UUID[][] mapBotsLayer;
-    private Map<UUID, BotV2> allBots = new HashMap<>();
+    private ConcurrentMap<UUID, BotV2> allBots = new ConcurrentHashMap<>();
+    private LinkedList<UUID> botsLinkedList = new LinkedList<>();
 
     private int mutation_count=0;
     private int drawstep=10;
-    private int perlinValue= 300;
-    private int sealevel = 145;
+    private int perlinValue=300;
+    private int sealevel=145;
     private int population;
     private int organic;
     private int viewMode;
@@ -75,15 +79,22 @@ public class WorldV2 implements GuiCallback {
 
         UUID botUID = mapBotsLayer[xx][yy];
         // remove bot from arrays
-        // common array
-        allBots.remove(botUID);
+        if (botsLinkedList.contains(botUID)){
+            botsLinkedList.remove(botUID);
+            // common array
+            allBots.remove(botUID);
+        }
         mapBotsLayer[xx][yy] = null;
     }
 
     public BotV2 getBotAtPos(MapPosition pos) {
         int xx = pos.x % width;
         int yy = pos.y % height;
-        return allBots.get(mapBotsLayer[xx][yy]);
+        if (botsLinkedList.contains(mapBotsLayer[xx][yy]))
+            return allBots.get(mapBotsLayer[xx][yy]);
+
+        else
+            return null;
     }
 
     public MapPosition moveBot(MapPosition position, MapPosition targetPos) {
@@ -98,13 +109,17 @@ public class WorldV2 implements GuiCallback {
         int xx = viewPoint.x % width;
         int yy = viewPoint.y % height;
 
-        return mapBotsLayer[xx][yy]!=null;
+        if (botsLinkedList.contains(mapBotsLayer[xx][yy]))
+            return mapBotsLayer[xx][yy]!=null;
+        else
+            return false;
     }
 
     public BotV2 createNewBot(BotV2 botV2, int i, MapPosition viewPoint) {
         BotV2 newBot = null;
         try {
             newBot = (BotV2) botV2.clone();
+            newBot.resetAge();
         } catch (CloneNotSupportedException e) {
             e.printStackTrace();
             return null;
@@ -114,7 +129,10 @@ public class WorldV2 implements GuiCallback {
 
         int xx = viewPoint.x % width;
         int yy = viewPoint.y % height;
-        UUID nbuid = UUID.randomUUID();
+            UUID nbuid = UUID.randomUUID();
+        while (botsLinkedList.contains(nbuid))
+            nbuid = UUID.randomUUID();
+        botsLinkedList.add(nbuid);
         mapBotsLayer[xx][yy] = nbuid;
         allBots.put(nbuid, newBot);
         return newBot;
@@ -127,7 +145,7 @@ public class WorldV2 implements GuiCallback {
     }
 
     private void clearMapItems(){
-        for (UUID botuid:allBots.keySet()) {
+        for (UUID botuid:botsLinkedList) {
             eliminateBot(allBots.get(botuid).getPosition());
         }
     }
@@ -165,7 +183,7 @@ public class WorldV2 implements GuiCallback {
             return true;
         } else {
             started = false;        //Выставляем влаг
-            Utils.joinSafe(thread);
+            CommonUtils.joinSafe(thread);
             thread = null;
             return false;
         }
@@ -201,17 +219,18 @@ public class WorldV2 implements GuiCallback {
                 mapObjectsLayer[x][y] = new PlaceProp();
                 float f = (float) perlinValue;
                 float value = perlin.getNoise(x / f, y / f, 8, 0.45f);        // вычисляем точку ландшафта
-                mapHeightLayer[x][y] = (int) (value * 255 + 128) & 255;
+                int h = (int) (value * 255 + 128) & 255;
+                mapHeightLayer[x][y] = h;
 //                worldMap[x][y].level = map[x][y];
                 // set solar power
-                if ((mapHeightLayer[x][y] > sealevel) && (mapHeightLayer[x][y] <= sealevel + 100))
-                    sunPower = (int) ((sealevel + 100 - mapHeightLayer[x][y]) * 0.2); // формула вычисления энергии
-                if ((mapHeightLayer[x][y] > sealevel - 50) && (mapHeightLayer[x][y] <= sealevel))
-                    sunPower = (int) ((mapHeightLayer[x][y] - sealevel + 50) * 0.1); // формула вычисления энергии
+                if ((h > sealevel) && (h <= sealevel + 100))
+                    sunPower = (int) ((sealevel + 100 - h) * 0.2); // формула вычисления энергии
+                if ((h > sealevel - 50) && (h <= sealevel))
+                    sunPower = (int) ((h - sealevel + 50) * 0.1); // формула вычисления энергии
                 mapObjectsLayer[x][y].setSunLevel(sunPower);
                 // set mineral level
-                if ((mapHeightLayer[x][y] > sealevel - 50) && (mapHeightLayer[x][y] <= sealevel))
-                    mineralLevel = (int) ((sealevel - mapHeightLayer[x][y]) * 0.2); // формула вычисления минералов
+                if ((h > sealevel - 50) && (h <= sealevel))
+                    mineralLevel = (int) ((sealevel - h) * 0.2); // формула вычисления минералов
                 mapObjectsLayer[x][y].setMineralLevel(mineralLevel);
 
             }
@@ -285,17 +304,53 @@ public class WorldV2 implements GuiCallback {
         organic = 0;
         int mapred, mapgreen, mapblue;
 
-        for (int x = 0; x < width; x++) {
-            for (int y = 0; y < height; y++) {
-                if (checkBotAtPos(new MapPosition(x,y))) {
-                    if (viewMode == Consts.VIEW_MODE_BASE) {
-                        rgb[y * width + x] = allBots.get(mapBotsLayer[x][y]).getColor();
-                    }
-                    else if (viewMode == Consts.VIEW_MODE_HP) {
-                        mapgreen = 255 - (int) (allBots.get(mapBotsLayer[x][y]).getHP() * 0.25);
-                        if (mapgreen < 0) mapgreen = 0;
-                        rgb[y * width + x] = (255 << 24) | (255 << 16) | (mapgreen << 8);
-                    }
+        for (UUID botuid:botsLinkedList) {
+            try {
+                if (viewMode == Consts.VIEW_MODE_BASE) {
+                    rgb[allBots.get(botuid).getPosition().y * width + allBots.get(botuid).getPosition().x] = allBots.get(botuid).getColor();
+                } else if (viewMode == Consts.VIEW_MODE_HP) {
+                    mapgreen = 255 - (int) (allBots.get(botuid).getHP() * 0.25);
+                    if (mapgreen < 0) mapgreen = 0;
+                    rgb[allBots.get(botuid).getPosition().y * width + allBots.get(botuid).getPosition().x] = (255 << 24) | (0 << 16) | (mapgreen << 8);
+                }
+//                    else if (viewMode == Consts.VIEW_MODE_MINERAL) {
+//                        mapblue = 255 - (int) (currentbot.mineral * 0.5);
+//                        if (mapblue < 0) mapblue = 0;
+//                        rgb[currentbot.y * width + currentbot.x] = (255 << 24) | (0) | (255 << 8) | mapblue;
+//                    }
+//                    else if (viewMode == VIEW_MODE_COMBINED) {
+//                        mapgreen = (int) (currentbot.c_green * (1 - currentbot.health * 0.0005));
+//                        if (mapgreen < 0) mapgreen = 0;
+//                        mapblue = (int) (currentbot.c_blue * (0.8 - currentbot.mineral * 0.0005));
+//                        rgb[currentbot.y * width + currentbot.x] = (255 << 24) | (currentbot.c_red << 16) | (mapgreen << 8) | mapblue;
+//                    }
+                else if (viewMode == Consts.VIEW_MODE_AGE) {
+                    mapred = 255 - (int) (allBots.get(botuid).getAge() / 4);
+                    if (mapred < 0) mapred = 0;
+                    rgb[allBots.get(botuid).getPosition().y * width + allBots.get(botuid).getPosition().x] = (255 << 24) | (mapred << 16) | (0) | 255;
+                }
+//                    else if (viewMode == VIEW_MODE_FAMILY) {
+//                        rgb[currentbot.y * width + currentbot.x] = currentbot.c_family;
+//                    }
+                population++;
+            }
+            catch(Exception e) {
+
+            }
+            // show map objects
+        }
+
+//        for (int x = 0; x < width; x++) {
+//            for (int y = 0; y < height; y++) {
+//                if (checkBotAtPos(new MapPosition(x,y))) {
+//                    if (viewMode == Consts.VIEW_MODE_BASE) {
+//                        rgb[y * width + x] = allBots.get(mapBotsLayer[x][y]).getColor();
+//                    }
+//                    else if (viewMode == Consts.VIEW_MODE_HP) {
+//                        mapgreen = 255 - (int) (allBots.get(mapBotsLayer[x][y]).getHP() * 0.25);
+//                        if (mapgreen < 0) mapgreen = 0;
+//                        rgb[y * width + x] = (255 << 24) | (255 << 16) | (mapgreen << 8);
+//                    }
 //                    else if (viewMode == Consts.VIEW_MODE_MINERAL) {
 //                        mapblue = 255 - (int) (currentbot.mineral * 0.5);
 //                        if (mapblue < 0) mapblue = 0;
@@ -315,11 +370,11 @@ public class WorldV2 implements GuiCallback {
 //                    else if (viewMode == VIEW_MODE_FAMILY) {
 //                        rgb[currentbot.y * width + currentbot.x] = currentbot.c_family;
 //                    }
-                    population++;
-                }
+//                    population++;
+//                }
                 // show map objects
-            }
-        }
+//            }
+//        }
 
 //        while (currentbot != zerobot) {
 //            if (currentbot.alive == 3) {                      // живой бот
@@ -394,25 +449,25 @@ public class WorldV2 implements GuiCallback {
             while (started) {       // обновляем матрицу
                 long time1 = System.currentTimeMillis();
 
-                if (allBots.size() == 0){
+                if (botsLinkedList.size() == 0){
                     population = 0;
                     JOptionPane.showMessageDialog(gui, "All Dead!!!");
                     started = false;        // Закончили работу
                     return;
                 }
 
-                Set<UUID> bots = allBots.keySet();
-                try {
-                    for (UUID botuid: bots) {
-                        if (allBots.keySet().contains(botuid))
-                            allBots.get(botuid).step();
-                        else
-                            System.out.println("bot "+botuid.toString() + " not exists!!");
+
+                    Iterator<UUID> it = allBots.keySet().iterator();
+                    while (it.hasNext()) {
+                        try {
+                        UUID botuid = it.next();
+                        allBots.get(botuid).step();
+                        }
+                        catch (Exception e) {
+
+                        }
                     }
-                }
-                catch (Exception e) {
-                    System.out.println(e.toString());
-                }
+
                 generation++;
                 long time2 = System.currentTimeMillis();
 //                System.out.println("Step execute " + ": " + (time2-time1) + "");

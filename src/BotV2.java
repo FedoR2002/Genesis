@@ -1,4 +1,7 @@
+import javafx.scene.shape.MoveTo;
+
 import java.util.Arrays;
+
 
 public class BotV2 implements Cloneable{
     // describing Bot class
@@ -8,7 +11,7 @@ public class BotV2 implements Cloneable{
     private int populationid;
     // birth (tick)
     private long birthtick;
-    private long age=0;
+    private int age=0;
     // HP
     private int hp;
     private int adr=0;
@@ -25,6 +28,9 @@ public class BotV2 implements Cloneable{
         this.hp = hp;
     }
 
+    public int getAge() {return age;}
+
+    public void resetAge() {age=0;}
     // color
     private int b_red = 170;
     private int b_blue = 170;
@@ -85,6 +91,7 @@ public class BotV2 implements Cloneable{
 
     // eat (minerals)
     private int botEatMinerals() {
+        System.out.println("eat minerals");
         PlaceProp posProp = WorldV2.getInstance().getPlaceProp(position);
         hp += (int) (posProp.getMineralLevel() * Consts.MIN2HP_COEFF);
         hp = Math.min(hp, Consts.MAX_BOT_HP);
@@ -94,8 +101,12 @@ public class BotV2 implements Cloneable{
 
     // eat (organics)
     private int botEatOrganics() {
+        System.out.println("eat organics");
         PlaceProp posProp = WorldV2.getInstance().getPlaceProp(position);
-        hp += (int) (posProp.getOrganicLevel() * Consts.ORG2HP_COEFF);
+        int canEat = hp / 4;
+        int willEat = (posProp.getOrganicLevel()>canEat)?canEat:posProp.getOrganicLevel();
+        hp += (int) (willEat * Consts.ORG2HP_COEFF);
+        posProp.setOrganicLevel(posProp.getOrganicLevel()-willEat);
         hp = Math.min(hp, Consts.MAX_BOT_HP);
         goBlack();
         return 2;
@@ -103,6 +114,7 @@ public class BotV2 implements Cloneable{
 
     // attack
     private int botEatOther() {
+        System.out.println("eat other");
         BotV2 otherBot = WorldV2.getInstance().getBotAtPos(viewPoint());
         // battle
         if (otherBot.getHP() == hp) {
@@ -115,7 +127,7 @@ public class BotV2 implements Cloneable{
                 int org_level = otherBot.getHP();
                 WorldV2.getInstance().getBotAtPos(viewPoint()).die();
                 WorldV2.getInstance().eliminateBot(viewPoint());
-                moveTo(viewPoint());
+                botMoveTo(viewPoint());
                 botEatOrganics();
                 goRed();
             } else {
@@ -128,9 +140,14 @@ public class BotV2 implements Cloneable{
 
     }
     // move 1 step
-    private int moveTo(MapPosition targetPos){
-        WorldV2.getInstance().moveBot(position, targetPos);
-        position = targetPos;
+    private int botMoveTo(MapPosition targetPos){
+        System.out.println("MOVE!!!");
+        if (bot_CheckAtView()==2)
+            hp -=hp/4;
+        else {
+            WorldV2.getInstance().moveBot(position, targetPos);
+            position = targetPos;
+        }
         return 2;
     }
     // see bot?
@@ -146,7 +163,7 @@ public class BotV2 implements Cloneable{
         for (int i=0;i<8;i++){
             if (!WorldV2.getInstance().checkBotAtPos(viewPoint())){
                 WorldV2.getInstance().incMutation_count();
-                if (WorldV2.getInstance().getMutation_count()%100 == 0) {
+                if (WorldV2.getInstance().getMutation_count()%1000 == 0) {
                     byte[] new_genom = mutate_genom(3);
                     WorldV2.getInstance().createNewBot(this, hp/2, viewPoint(), new_genom);
                 }
@@ -185,24 +202,24 @@ public class BotV2 implements Cloneable{
     // check
     // colors
     private void goGreen(){
-        b_green = Math.min(b_green+32, 255);
-        b_blue = Math.max(b_blue-32, 0);
-        b_red = Math.max(b_red-32,0);
+        b_green = Math.min(b_green+ Consts.CSHIFT, 255);
+        b_blue = Math.max(b_blue-Consts.CSHIFT, 0);
+        b_red = Math.max(b_red-Consts.CSHIFT,0);
     }
     private void goBlue(){
-        b_green = Math.max(b_green-32, 0);
-        b_blue = Math.min(b_blue+32, 255);
-        b_red = Math.max(b_red-32,0);
+        b_green = Math.max(b_green-Consts.CSHIFT, 0);
+        b_blue = Math.min(b_blue+Consts.CSHIFT, 255);
+        b_red = Math.max(b_red-Consts.CSHIFT,0);
     }
     private void goRed(){
-        b_green = Math.max(b_green-32, 0);
-        b_blue = Math.max(b_blue-32, 0);
-        b_red = Math.min(b_red+32,255);
+        b_green = Math.max(b_green-Consts.CSHIFT, 0);
+        b_blue = Math.max(b_blue-Consts.CSHIFT, 0);
+        b_red = Math.min(b_red+Consts.CSHIFT,255);
     }
     private void goBlack(){
-        b_green = Math.max(b_green-32, 0);
-        b_blue = Math.max(b_blue-32, 0);
-        b_red = Math.max(b_red-32,0);
+        b_green = Math.max(b_green-Consts.CSHIFT, 0);
+        b_blue = Math.max(b_blue-Consts.CSHIFT, 0);
+        b_red = Math.max(b_red-Consts.CSHIFT,0);
     }
 
     public int getColor(){
@@ -264,10 +281,15 @@ public class BotV2 implements Cloneable{
                     break;
 //*******************************************************************
 //...............  шаг с параметром  ................................
-//                case 26:
-//                    botJumpAdr( botMove()); // смещаем УТК на значение клетки (botMove(): 2-пусто  3-стена  4-органика 5-бот 6-родня)
-//                    breakflag = 1;
-//                    break;
+                case 26:
+                case 27:
+                case 28:
+                case 29:
+                case 30:
+                case 31:
+                    botJumpAdr(botMoveTo(viewPoint())); // смещаем УТК на значение клетки (botMove(): 2-пусто  3-стена  4-органика 5-бот 6-родня)
+                    breakflag = 1;
+                    break;
 
 
 //*******************************************************************
@@ -280,18 +302,18 @@ public class BotV2 implements Cloneable{
                     break;
 //*******************************************************************
 //............... хемосинтез (энерия из минералов) ..................
-//                case 33:
-//                    botEatMinerals();
-//                    botIncAdr(1);
-//                    breakflag = 1;
-//                    break;
+                case 33:
+                    botEatMinerals();
+                    botIncAdr(1);
+                    breakflag = 1;
+                    break;
 //*******************************************************************
 //............... хемосинтез (энерия из органики) ..................
-//                case 34:
-//                    botEatOrganics();
-//                    botIncAdr(1);
-//                    breakflag = 1;
-//                    break;
+                case 34:
+                    botEatOrganics();
+                    botIncAdr(1);
+                    breakflag = 1;
+                    break;
 //*******************************************************************
 //............... хемосинтез (энерия из минералов) ..................
 //                case 35:
@@ -379,7 +401,9 @@ public class BotV2 implements Cloneable{
 //................    значит безусловный переход        .................
 //.....   прибавляем к указателю текущей команды значение команды   .....
                 default:
-                    botIncAdr(command);
+                    // тараканы
+                    botJumpAdr(botMoveTo(viewPoint()));
+//                    botIncAdr(command);
                     break;
             }
             if (breakflag == 1) break;
@@ -398,12 +422,12 @@ public class BotV2 implements Cloneable{
 
 //            hp -= 3;                            // каждый ход отнимает 3 единицы энегрии
             age++;                                  // увеличиваем возраст
-            if (hp <= 5) {                      // если энергии стало меньше 5
+            if (hp <= 5 || age == 1000) {                      // если энергии стало меньше 5
                 die();
                 WorldV2.getInstance().eliminateBot(position);
                 return;                             // и передаем управление к следующему боту
             }
-            hp -= 3;
+            hp -= 4;
     }
 
     // -- увеличение адреса команды   --------------

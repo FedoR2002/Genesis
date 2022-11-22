@@ -1,3 +1,5 @@
+import Utils.CommonUtils;
+
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
@@ -89,7 +91,7 @@ public class World implements GuiCallback, Consts {
             return true;
         } else {
             started = false;        //Выставляем влаг
-            Utils.joinSafe(thread);
+            CommonUtils.joinSafe(thread);
             thread = null;
             return false;
         }

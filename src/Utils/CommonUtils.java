@@ -1,7 +1,8 @@
-import java.util.Arrays;
-import java.util.List;
+package Utils;
 
-public class Utils {
+import java.util.Arrays;
+
+public class CommonUtils {
     public static void joinSafe(Thread thread) {
         try {
             thread.join();

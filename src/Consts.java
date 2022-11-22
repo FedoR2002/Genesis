@@ -14,8 +14,9 @@ public interface Consts {
     int MAX_BOT_HP = 1000;
     int MIND_SIZE = 64;
 
-    float SUN2HP_COEFF = 1;
+    float SUN2HP_COEFF = 0.5f;
     float MIN2HP_COEFF = 1;
     float ORG2HP_COEFF = 1;
 
+    int CSHIFT = 16;
 }
